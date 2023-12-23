@@ -4,5 +4,5 @@ import { todos } from './reducer';
 
 export type State = ReturnType<ReturnType<typeof createStore>['getState']>;
 
-export const createStore = <M extends Middleware>(middleware: M) =>
-    configureStore({ reducer: combineReducers({ todos }), middleware: [middleware] });
+export const createStore = <M extends Middleware>(middleware?: M) =>
+    configureStore({ reducer: combineReducers({ todos }), middleware: [middleware].filter(Boolean) as Middleware[] });

@@ -10,7 +10,7 @@ export enum TransitionOperation {
 }
 
 export type TransitionNamespace = `${string}::${string}`;
-export type TransitionAction<A = AnyAction> = A & { meta: { [MetaKey]: TransitionMeta } };
+export type TransitionAction<Action = AnyAction> = Action & { meta: { [MetaKey]: TransitionMeta } };
 export type TransitionMeta = { id: string; operation: TransitionOperation; conflict: boolean; failed: boolean };
 
 /** Extracts the transition meta definitions on an action */
@@ -67,16 +67,16 @@ const createCommitMatcher =
 
 export const createTransition = <
     PA extends PrepareAction<any>,
-    A extends ReturnType<PA>,
-    P extends Parameters<PA>,
-    T extends TransitionNamespace,
-    E = A extends { error: infer E } ? E : never,
-    M = { [MetaKey]: TransitionMeta } & (A extends { meta: infer M } ? M : {}),
+    Action extends ReturnType<PA>,
+    Params extends Parameters<PA>,
+    Type extends TransitionNamespace,
+    Err = Action extends { error: infer E } ? E : never,
+    Meta = { [MetaKey]: TransitionMeta } & (Action extends { meta: infer M } ? M : {}),
 >(
-    type: T,
+    type: Type,
     operation: TransitionOperation,
     prepare: PA,
-): ActionCreatorWithPreparedPayload<[transitionId: string, ...P], A['payload'], T, E, M> =>
+): ActionCreatorWithPreparedPayload<[transitionId: string, ...Params], Action['payload'], Type, Err, Meta> =>
     createAction(type, (transitionId, ...params) =>
         withTransitionMeta(prepare(...params), {
             conflict: false,
@@ -86,36 +86,42 @@ export const createTransition = <
         }),
     );
 
+type EmptyPayload = { payload: never };
+type PA_Empty = () => EmptyPayload;
+type PA_Error = (error: Error) => EmptyPayload & { error: Error };
+
 export const createTransitions = <
-    ActionType extends `${string}::${string}`,
+    Type extends TransitionNamespace,
     PA_Stage extends PrepareAction<any>,
-    PA_Commit extends PA_Stage,
-    PA_Fail extends PrepareAction<any>,
-    PA_Stash extends PrepareAction<any>,
+    PA_Commit extends PrepareAction<any> = PA_Empty,
+    PA_Stash extends PrepareAction<never> = PA_Empty,
+    PA_Fail extends PrepareAction<never> = PA_Error,
 >(
-    type: ActionType,
+    type: Type,
     options:
         | PA_Stage
         | {
               stage: PA_Stage;
-              stash?: PA_Stash;
               commit?: PA_Commit;
               fail?: PA_Fail;
+              stash?: PA_Stash;
           },
 ) => {
     const noOptions = typeof options === 'function';
-    const empty = () => ({ payload: {} });
+
+    const emptyPA = () => ({ payload: {} });
+    const errorPA = (error: Error) => ({ error, payload: {} });
 
     const stagePA = noOptions ? options : options.stage;
-    const commitPA = noOptions ? options : options.commit ?? options.stage;
-    const failPA = noOptions ? empty : options.fail ?? empty;
-    const stashPA = noOptions ? empty : options.stash ?? empty;
+    const commitPA = noOptions ? emptyPA : options.commit ?? emptyPA;
+    const failPA = noOptions ? errorPA : options.fail ?? errorPA;
+    const stashPA = noOptions ? emptyPA : options.stash ?? emptyPA;
 
     return {
         stage: createTransition(`${type}::stage`, TransitionOperation.STAGE, stagePA),
-        commit: createTransition(`${type}::commit`, TransitionOperation.COMMIT, commitPA),
-        fail: createTransition(`${type}::fail`, TransitionOperation.FAIL, failPA),
-        stash: createTransition(`${type}::stash`, TransitionOperation.STASH, stashPA),
-        match: createCommitMatcher<ActionType, PA_Commit>(type),
+        commit: createTransition(`${type}::commit`, TransitionOperation.COMMIT, commitPA as PA_Commit),
+        fail: createTransition(`${type}::fail`, TransitionOperation.FAIL, failPA as PA_Fail),
+        stash: createTransition(`${type}::stash`, TransitionOperation.STASH, stashPA as PA_Stash),
+        match: createCommitMatcher<Type, PA_Stage>(type),
     };
 };

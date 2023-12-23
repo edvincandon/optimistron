@@ -21,7 +21,7 @@ export const bindReducer =
         try {
             return reducer(bindState(transitionState.state), action);
         } catch (error) {
-            console.warn(`Error while processing action ${action.type}`);
+            console.warn(`Error while processing action ${action.type}`, error);
             return transitionState.state;
         }
     };

@@ -24,7 +24,7 @@ describe('Transitions', () => {
 
         test('it should flag transition as failed', () => {
             const stage = transition.stage('transition_id', 1);
-            const fail = transition.fail('transition_id');
+            const fail = transition.fail('transition_id', new Error());
 
             const processed = processTransition(fail, [stage]);
 

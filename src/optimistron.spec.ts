@@ -72,7 +72,7 @@ describe('optimistron', () => {
 
             test('stage -> commit', () => {
                 const stage = createItem.stage('001', { id: '001', value: '1', revision: 0 });
-                const commit = createItem.commit('001', stage.payload.item);
+                const commit = createItem.commit('001');
                 const nextState = [stage, commit].reduce(reducer, initial);
 
                 expect(nextState).toEqual({ state: { ['001']: stage.payload.item } });
@@ -92,9 +92,10 @@ describe('optimistron', () => {
             });
 
             test('update -> conflict', () => {
-                const commit = createItem.commit('001', { id: '001', value: '1', revision: 1 });
-                const update = editItem.stage('001', { id: '001', value: '1', revision: 0 });
-                const nextState = [commit, update].reduce(reducer, initial);
+                const stage = createItem.stage('001', { id: '001', value: '1', revision: 2 });
+                const commit = createItem.commit('001');
+                const update = editItem.stage('001', { id: '001', value: '2', revision: 1 });
+                const nextState = [stage, commit, update].reduce(reducer, initial);
 
                 expect(selectIsOptimistic('001')(nextState)).toBe(true);
                 expect(selectIsFailed('001')(nextState)).toBe(false);

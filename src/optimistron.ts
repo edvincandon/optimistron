@@ -1,5 +1,11 @@
 import type { AnyAction, Reducer } from 'redux';
-import { TransitionOperation, getTransitionMeta, isTransitionForNamespace } from './actions';
+import {
+    TransitionOperation,
+    getTransitionID,
+    getTransitionMeta,
+    isTransitionForNamespace,
+    updateTransition,
+} from './actions';
 import { ReducerMap, bindReducer, type HandlerReducer } from './reducer';
 import {
     TransitionState,
@@ -35,13 +41,18 @@ export const optimistron = <S, C extends any[], U extends any[], D extends any[]
 
             if (isTransitionForNamespace(action, namespace)) {
                 const nextTransitions = processTransition(options?.sanitizeAction?.(action) ?? action, transitions);
-                const { operation } = getTransitionMeta(action);
+                const { operation, id } = getTransitionMeta(action);
 
                 switch (operation) {
                     case TransitionOperation.COMMIT:
+                        /* Find the matching staged action in the transition list. If
+                         * it does not exist, do nothing else treat it as a commit */
+                        const staged = transitions.find((entry) => id === getTransitionID(entry));
+                        if (!staged) return next(state, nextTransitions);
+
                         /* Comitting will apply the action to the reducer */
-                        const commit = boundReducer(transition, action);
-                        return next(commit, nextTransitions);
+                        const commit = updateTransition(staged, { operation: TransitionOperation.COMMIT });
+                        return next(boundReducer(transition, commit), nextTransitions);
                     default:
                         /* Every other transition actions will not be applied.
                          * If you need to get the optimistic state use the provided
@@ -54,7 +65,7 @@ export const optimistron = <S, C extends any[], U extends any[], D extends any[]
         })();
 
         /* only sanitize the mutations if the states are referentially different to avoid
-         * checking for conflicts unnecessarily on noops on the bound reducer */
+         * checking for conflicts and noops unnecessarily on the bound reducer */
         const mutated = nextTransition !== transition;
         nextTransition.transitions = mutated ? sanitizer(nextTransition) : nextTransition.transitions;
 
